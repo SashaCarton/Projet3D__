@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Convert .PLY to .GLTF</title>
+  <script src="https://cdn.jsdelivr.net/npm/three@latest/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@latest/examples/js/loaders/PLYLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@latest/examples/js/exporters/GLTFExporter.js"></script>
+</head>
+
+<body>
+  <h1>Convert .PLY to .GLTF</h1>
+  <ul>
+    <li><a href="/scene.html">Back to 3D Scene</a></li>
+    <li><a href="/fbx.html">Convert .FBX to .GLTF</a></li>
+    <li><a href="/fbx-glb.html">Convert .FBX to .GLB</a></li>
+    <li><a href="/ObjVersGlb.html">Convert .OBJ to .GLB</a></li>
+  </ul>
+
+
+  <input type="file" id="fileInput" accept=".ply">
+  <button id="convertButton" disabled>Convert to GLTF</button>
+  <div id="loadingScreen" style="display: none;">Loading...</div>
+  <script>
+    const plyLoader = new THREE.PLYLoader();
+    const gltfExporter = new THREE.GLTFExporter();
+    let scene, mesh;
+
+    function initScene() {
+      scene = new THREE.Scene();
+      const ambientLight = new THREE.AmbientLight(0xcccccc, 0.8);
+      const directionalLight = new THREE.DirectionalLight(0xffffff, 1);
+      directionalLight.position.set(1, 1, 1).normalize();
+      scene.add(ambientLight);
+      scene.add(directionalLight);
+    }
+
+    document.getElementById('fileInput').addEventListener('change', (event) => {
+      const file = event.target.files[0];
+      if (file) {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const plyData = e.target.result;
+          const geometry = plyLoader.parse(plyData);
+
+          console.log("Attributs de la géométrie chargée :", geometry.attributes);
+
+          // Vérifiez et ajoutez les couleurs si disponibles
+          if (geometry.attributes['f_dc_0'] && geometry.attributes['f_dc_1'] && geometry.attributes['f_dc_2']) {
+            const count = geometry.attributes['f_dc_0'].count;
+            const colors = new Float32Array(count * 3);
+            for (let i = 0; i < count; i++) {
+              colors[i * 3] = geometry.attributes['f_dc_0'].array[i]; // Rouge
+              colors[i * 3 + 1] = geometry.attributes['f_dc_1'].array[i]; // Vert
+              colors[i * 3 + 2] = geometry.attributes['f_dc_2'].array[i]; // Bleu
+            }
+            geometry.setAttribute('color', new THREE.BufferAttribute(colors, 3));
+            console.log("Couleurs ajoutées à la géométrie.");
+          } else {
+            console.warn("Les attributs de couleur (f_dc_0, f_dc_1, f_dc_2) ne sont pas disponibles.");
+          }
+
+          // Créez le matériau
+          const material = new THREE.MeshStandardMaterial({
+            vertexColors: geometry.hasAttribute('color'),
+            color: geometry.hasAttribute('color') ? undefined : 0x0055ff,
+            roughness: 0.5,
+            metalness: 0.1,
+          });
+
+          // Créez un mesh
+          mesh = new THREE.Mesh(geometry, material);
+          scene.add(mesh);
+
+          // Ajoutez les points pour afficher chaque sommet
+          const pointsMaterial = new THREE.PointsMaterial({
+            size: 0.01,
+            vertexColors: true,
+          });
+          const points = new THREE.Points(geometry, pointsMaterial);
+          scene.add(points);
+
+          // Activer le bouton de conversion
+          document.getElementById('convertButton').disabled = false;
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    });
+
+    // Convertir le modèle en GLTF
+    document.getElementById('convertButton').addEventListener('click', () => {
+      if (!mesh) {
+        alert("Veuillez charger un fichier .ply avant de convertir.");
+        return;
+      }
+
+      const loadingScreen = document.getElementById('loadingScreen');
+      loadingScreen.style.display = 'block';
+
+      const options = {
+        binary: false,
+        embedImages: true,
+        truncateDrawRange: true,
+      };
+
+      gltfExporter.parse(
+        scene,
+        (result) => {
+          loadingScreen.style.display = 'none';
+          const blob = new Blob([JSON.stringify(result)], { type: 'application/json' });
+          const link = document.createElement('a');
+          link.href = URL.createObjectURL(blob);
+          link.download = 'model.gltf';
+          link.click();
+        },
+        options
+      );
+    });
+
+    // Initialisation de la scène
+    initScene();
+  </script>
+</body>
+
+</html>
